@@ -11,6 +11,8 @@ import (
 	"syscall"
 
 	"github.com/pmoieni/quic-example/internal/transport"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,10 +28,20 @@ func main() {
 
 	eg, _ := errgroup.WithContext(sCtx)
 
-	srv := transport.NewQuicServer()
+	tlsConf := generateTLSConfig()
+
+	/*
+		srv := transport.NewQuicServer(&transport.QuicServerFlags{Host: "localhost", Port: 1234})
+
+		eg.Go(func() error {
+			return srv.Listen(sCtx, tlsConf, &quic.Config{Allow0RTT: true})
+		})
+	*/
+
+	http3Srv := transport.NewHTTP3Server(&transport.ServerFlags{Host: "localhost", Port: 1234}, tlsConf, &quic.Config{Allow0RTT: true, EnableDatagrams: true})
 
 	eg.Go(func() error {
-		return srv.Listen(sCtx, "localhost:1234", generateTLSConfig())
+		return http3Srv.Run("", "")
 	})
 
 	eg.Wait()
@@ -51,6 +63,6 @@ func generateTLSConfig() *tls.Config {
 			Certificate: [][]byte{certDER},
 			PrivateKey:  priv,
 		}},
-		NextProtos: []string{"quic-echo-example"},
+		NextProtos: []string{http3.NextProtoH3},
 	}
 }

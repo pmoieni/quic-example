@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 
 	"github.com/quic-go/quic-go"
 )
@@ -13,16 +14,32 @@ const (
 	requestUpperBound = 256
 )
 
-type QuicServer struct{}
-
-func NewQuicServer() *QuicServer {
-	return &QuicServer{}
+type QuicServer struct {
+	transport *quic.Transport
 }
 
-func (s *QuicServer) Listen(ctx context.Context, addr string, tlsConf *tls.Config) error {
-	ln, err := quic.ListenAddr(addr, tlsConf, nil)
+type QuicServerFlags struct {
+	Host string
+	Port uint
+}
+
+func NewQuicServer(flags *QuicServerFlags) *QuicServer {
+	resolved, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(flags.Host+":%d", flags.Port))
 	if err != nil {
-		return err
+		log.Fatal("failed to resolve address for QUIC listener: %v", err)
+	}
+
+	udpConn, err := net.ListenUDP("udp4", resolved)
+
+	transport := quic.Transport{Conn: udpConn}
+
+	return &QuicServer{transport: &transport}
+}
+
+func (s *QuicServer) Listen(ctx context.Context, tlsConf *tls.Config, quicConf *quic.Config) error {
+	ln, err := s.transport.Listen(tlsConf, quicConf)
+	if err != nil {
+		log.Fatal("failed to initialize QUIC listener: %v", err)
 	}
 	defer ln.Close()
 
